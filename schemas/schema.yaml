@@ -1,0 +1,495 @@
+openapi: 3.0.3
+info:
+  title: SMC Loyalty System Service API
+  description: |
+    API для управления программами лояльности компаний (автомоек) в экосистеме SMC.
+
+    ## Функциональность
+
+    Сервис предоставляет возможность:
+    - Создания виртуальных карт лояльности для клиентов
+    - Настройки программ лояльности компаниями
+    - Получения информации о картах (для генерации QR-кодов)
+
+    ## Типы карт лояльности
+
+    **Текущая реализация:**
+    - **Фиксированная скидка** - постоянный процент скидки для всех клиентов компании
+
+    **Будущие типы (архитектура готова):**
+    - **Прогрессивная скидка** - скидка зависит от истории обслуживания
+    - **Накопительная система** - накопление и списание баллов
+
+    ## Аутентификация
+
+    Защищённые endpoints требуют заголовок:
+    - `X-User-ID` - Telegram user ID пользователя (для проверки прав менеджера)
+
+  version: 1.0.0
+  contact:
+    name: SMC Development Team
+
+servers:
+  - url: http://localhost:8084/api/v1
+    description: Local development server
+  - url: https://api.smc-carwash.com/loyalty/v1
+    description: Production server
+
+tags:
+  - name: Loyalty Cards
+    description: Операции с картами лояльности клиентов
+  - name: Loyalty Configuration
+    description: Настройка программ лояльности компаниями
+  - name: Health
+    description: Проверка работоспособности сервиса
+
+paths:
+  # ========================================
+  # LOYALTY CARDS ENDPOINTS
+  # ========================================
+
+  /loyalty-cards:
+    get:
+      tags:
+        - Loyalty Cards
+      summary: Получить карту лояльности клиента
+      description: |
+        Получение информации о карте лояльности клиента в конкретной компании.
+        Возвращает данные для генерации QR-кода.
+
+        **Публичный endpoint** - не требует аутентификации.
+      operationId: getLoyaltyCard
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          description: Telegram user ID клиента
+          schema:
+            type: integer
+            format: int64
+          example: 987654321
+        - name: companyId
+          in: query
+          required: true
+          description: ID компании из SellerService
+          schema:
+            type: integer
+            format: int64
+          example: 1
+      responses:
+        '200':
+          description: Карта лояльности найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoyaltyCard'
+              example:
+                card_id: 123
+                user_id: 987654321
+                company_id: 1
+                card_type: "fixed_discount"
+                status: "active"
+                discount_percentage: 10.0
+                created_at: "2025-01-15T10:00:00Z"
+                updated_at: "2025-01-15T10:00:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Карта лояльности не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "loyalty card not found"
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - Loyalty Cards
+      summary: Создать карту лояльности
+      description: |
+        Создание новой карты лояльности для клиента в компании.
+        Карта создаётся только если:
+        - Программа лояльности настроена для компании
+        - Программа лояльности включена
+        - У клиента ещё нет карты в этой компании
+
+        **Публичный endpoint** - не требует аутентификации.
+      operationId: createLoyaltyCard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLoyaltyCardRequest'
+            example:
+              user_id: 987654321
+              company_id: 1
+      responses:
+        '201':
+          description: Карта лояльности успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoyaltyCard'
+              example:
+                card_id: 123
+                user_id: 987654321
+                company_id: 1
+                card_type: "fixed_discount"
+                status: "active"
+                discount_percentage: 10.0
+                created_at: "2025-01-15T10:00:00Z"
+                updated_at: "2025-01-15T10:00:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Программа лояльности не настроена для компании
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "loyalty program not configured for this company"
+        '409':
+          description: Карта лояльности уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "loyalty card already exists"
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ========================================
+  # LOYALTY CONFIGURATION ENDPOINTS
+  # ========================================
+
+  /companies/{companyId}/loyalty-config:
+    post:
+      tags:
+        - Loyalty Configuration
+      summary: Настроить программу лояльности компании
+      description: |
+        Создание или обновление настроек программы лояльности для компании.
+
+        **Требует аутентификации** через заголовок `X-User-ID`.
+
+        **Права доступа:**
+        - Superuser - может настроить для любой компании
+        - Manager - может настроить только для своей компании (проверяется через SellerService)
+      operationId: configureLoyalty
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          description: ID компании
+          schema:
+            type: integer
+            format: int64
+          example: 1
+        - $ref: '#/components/parameters/XUserID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigureLoyaltyRequest'
+            example:
+              discount_percentage: 15.0
+      responses:
+        '200':
+          description: Программа лояльности успешно настроена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoyaltyConfig'
+              example:
+                company_id: 1
+                card_type: "fixed_discount"
+                is_enabled: true
+                discount_percentage: 15.0
+                created_at: "2025-01-15T10:00:00Z"
+                updated_at: "2025-01-15T10:00:00Z"
+        '400':
+          description: Невалидные данные (например, процент скидки вне диапазона 0-100)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "discount percentage must be between 0 and 100"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Недостаточно прав (пользователь не является менеджером компании)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "access denied: user is not a manager of this company"
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          description: SellerService недоступен (не удалось проверить права)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "seller service unavailable"
+
+  # ========================================
+  # HEALTH CHECK
+  # ========================================
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Проверка работоспособности сервиса
+      description: Health check endpoint для мониторинга
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Сервис работает
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2025-01-15T10:00:00Z"
+
+# ========================================
+# COMPONENTS
+# ========================================
+
+components:
+  # ========================================
+  # PARAMETERS
+  # ========================================
+
+  parameters:
+    XUserID:
+      name: X-User-ID
+      in: header
+      required: true
+      description: Telegram user ID текущего пользователя
+      schema:
+        type: integer
+        format: int64
+      example: 987654321
+
+  # ========================================
+  # SCHEMAS
+  # ========================================
+
+  schemas:
+    # --- Loyalty Card ---
+
+    LoyaltyCard:
+      type: object
+      required:
+        - card_id
+        - user_id
+        - company_id
+        - card_type
+        - status
+        - discount_percentage
+        - created_at
+        - updated_at
+      properties:
+        card_id:
+          type: integer
+          format: int64
+          description: Уникальный идентификатор карты
+          readOnly: true
+          example: 123
+        user_id:
+          type: integer
+          format: int64
+          description: Telegram user ID клиента
+          example: 987654321
+        company_id:
+          type: integer
+          format: int64
+          description: ID компании из SellerService
+          example: 1
+        card_type:
+          type: string
+          description: Тип карты лояльности
+          enum:
+            - fixed_discount
+            - progressive_discount
+            - points_based
+          example: "fixed_discount"
+        status:
+          type: string
+          description: Статус карты
+          enum:
+            - active
+            - suspended
+            - expired
+          example: "active"
+        discount_percentage:
+          type: number
+          format: double
+          description: Процент скидки (для типа fixed_discount)
+          minimum: 0
+          maximum: 100
+          example: 10.0
+        created_at:
+          type: string
+          format: date-time
+          description: Дата и время создания карты
+          readOnly: true
+          example: "2025-01-15T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Дата и время последнего обновления
+          readOnly: true
+          example: "2025-01-15T10:00:00Z"
+
+    CreateLoyaltyCardRequest:
+      type: object
+      required:
+        - user_id
+        - company_id
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          description: Telegram user ID клиента
+          example: 987654321
+        company_id:
+          type: integer
+          format: int64
+          description: ID компании
+          example: 1
+
+    # --- Loyalty Config ---
+
+    LoyaltyConfig:
+      type: object
+      required:
+        - company_id
+        - card_type
+        - is_enabled
+        - discount_percentage
+        - created_at
+        - updated_at
+      properties:
+        company_id:
+          type: integer
+          format: int64
+          description: ID компании
+          example: 1
+        card_type:
+          type: string
+          description: Тип программы лояльности
+          enum:
+            - fixed_discount
+            - progressive_discount
+            - points_based
+          example: "fixed_discount"
+        is_enabled:
+          type: boolean
+          description: Включена ли программа лояльности
+          example: true
+        discount_percentage:
+          type: number
+          format: double
+          description: Процент скидки (для типа fixed_discount)
+          minimum: 0
+          maximum: 100
+          example: 15.0
+        progressive_config:
+          type: object
+          description: Конфигурация прогрессивной скидки (для будущего использования)
+          nullable: true
+          example: null
+        points_config:
+          type: object
+          description: Конфигурация накопительной системы (для будущего использования)
+          nullable: true
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          description: Дата и время создания конфигурации
+          readOnly: true
+          example: "2025-01-15T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Дата и время последнего обновления
+          readOnly: true
+          example: "2025-01-15T10:00:00Z"
+
+    ConfigureLoyaltyRequest:
+      type: object
+      required:
+        - discount_percentage
+      properties:
+        discount_percentage:
+          type: number
+          format: double
+          description: Процент скидки (0-100)
+          minimum: 0
+          maximum: 100
+          example: 15.0
+
+    # --- Error ---
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Описание ошибки
+          example: "invalid request"
+
+  # ========================================
+  # RESPONSES
+  # ========================================
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "invalid request body"
+
+    Unauthorized:
+      description: Не авторизован (отсутствует или невалидный X-User-ID)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "missing or invalid X-User-ID header"
+
+    InternalError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "internal server error"
