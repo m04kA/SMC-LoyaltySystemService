@@ -1,8 +1,8 @@
 .PHONY: help build run test clean clean-all docker-build docker-up docker-down docker-restart docker-logs docker-clean docker-prune migrate-up migrate-down db-reset
 
 # Variables
-APP_NAME=smk_loyaltysystemrvice
-DB_NAME=smk_loyaltysystemrvice
+APP_NAME=smk_loyaltysystemservice
+DB_NAME=smk_loyaltysystemservice
 DOCKER_COMPOSE=docker-compose
 GO=go
 

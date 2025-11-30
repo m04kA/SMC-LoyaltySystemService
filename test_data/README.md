@@ -248,7 +248,7 @@ brew install jq
 
 Если возникли проблемы:
 1. Проверьте логи: `make docker-logs-app`
-2. Проверьте БД: `docker exec -it loyaltysystemservice-db psql -U postgres -d smk_loyaltysystemrvice`
+2. Проверьте БД: `docker exec -it loyaltysystemservice-db psql -U postgres -d smk_loyaltysystemservice`
 3. Пересоздайте окружение: `make db-reset`
 
 **Happy Testing! 🚀**
