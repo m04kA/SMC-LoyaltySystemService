@@ -1,8 +1,8 @@
 .PHONY: help build run test clean clean-all docker-build docker-up docker-down docker-restart docker-logs docker-clean docker-prune migrate-up migrate-down db-reset
 
 # Variables
-APP_NAME=smk_loyaltysystemservice
-DB_NAME=smk_loyaltysystemservice
+APP_NAME=smc_loyaltysystemservice
+DB_NAME=smc_loyaltysystemservice
 DOCKER_COMPOSE=docker-compose
 GO=go
 
@@ -94,7 +94,7 @@ docker-clean:
 
 docker-prune:
 	@echo "Removing project Docker images..."
-	@docker images | grep smk-loyaltysystemservice | awk '{print $$3}' | xargs -r docker rmi -f || true
+	@docker images | grep smc-loyaltysystemservice | awk '{print $$3}' | xargs -r docker rmi -f || true
 	@echo "Docker images removed"
 
 # Database commands

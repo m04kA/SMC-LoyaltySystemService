@@ -285,7 +285,7 @@ CREATE INDEX idx_loyalty_configs_enabled ON loyalty_configs(is_enabled);
 Проверка прав через SellerService (manager_ids).
 
 ### Название модуля
-`github.com/m04kA/SMC-LoyaltySystemService` - **правильное** (SMC, не SMK).
+`github.com/m04kA/SMC-LoyaltySystemService` - **правильное** (SMC, не smc).
 
 ### SellerService клиент
 **УЖЕ РЕАЛИЗОВАН** в `internal/integrations/sellerservice/` - использовать его!
